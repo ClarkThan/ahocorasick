@@ -15,16 +15,16 @@ go get github.com/ClarkThan/ahocorasick
 package main
 
 import (
-	"fmt"
+    "fmt"
     
     "github.com/ClarkThan/ahocorasick"
 )
 
 func main() {
-	m := ahocorasick.NewMatcher()
+    m := ahocorasick.NewMatcher()
     m.BuildWithPatterns([]string{"she", "he"})
     ret1 := m.Search("shers")  // ["she", "he"]
-	fmt.Println(ret1)
+    fmt.Println(ret1)
     
     indexedHit := m.SearchIndexed("shers")  // [{0, 3}, {1, 2}]
     fmt.Println(indexedHit)
