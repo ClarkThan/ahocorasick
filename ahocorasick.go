@@ -86,6 +86,13 @@ func (m *Matcher) doAddPattern(pat string) {
 		node = nn
 		len++
 	}
+
+	// if existed then skip
+	for _, e := range node.ends {
+		if e == len {
+			return
+		}
+	}
 	node.ends = append(node.ends, len)
 }
 

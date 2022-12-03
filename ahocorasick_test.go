@@ -61,6 +61,7 @@ func TestSearch(t *testing.T) {
 		}
 
 		ac.AddPattern("foo")
+		ac.AddPattern("foo")
 		ac.BuildWithPatterns([]string{" "})
 		m = ac.Search("foo bar baz")
 		if len(m) != 3 || m[0] != "foo" || m[1] != " " || m[2] != " " {

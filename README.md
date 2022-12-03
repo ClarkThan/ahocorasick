@@ -16,7 +16,7 @@ package main
 
 import (
 	"fmt"
-
+    
     "github.com/ClarkThan/ahocorasick"
 )
 
