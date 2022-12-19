@@ -59,6 +59,9 @@ func TestSearch(t *testing.T) {
 		if m != nil {
 			t.Fatalf("you should got nothing, but got: %v", m)
 		}
+		if ac.Match("aho corasick") {
+			t.Fatalf("should not matched")
+		}
 
 		ac.AddPattern("foo")
 		ac.AddPattern("foo")
@@ -89,6 +92,28 @@ func TestSearchIndexed(t *testing.T) {
 
 	if matched[0] != "管制刀具" || matched[1] != "港独" {
 		t.Fatalf("expected `管制刀具`, `港独`, but got: %s, %s", matched[0], matched[1])
+	}
+}
+
+func TestMatch(t *testing.T) {
+	ac := NewMatcher()
+	ac.BuildWithPatterns(zhSensitiveWords)
+	cases := []struct {
+		q string
+		m bool
+	}{
+		{"独裁", true},
+		{"罢工", true},
+		{"共", false},
+		{"喜提", false},
+		{"shit", false},
+		{"港独分子", true},
+	}
+
+	for _, c := range cases {
+		if ac.Match(c.q) != c.m {
+			t.Fatalf("expected matched result: %t for %s", c.m, c.q)
+		}
 	}
 }
 

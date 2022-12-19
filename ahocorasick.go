@@ -212,3 +212,25 @@ func (m *Matcher) Search(s string) (ret []string) {
 
 	return
 }
+
+// Match return true if does matched
+func (m *Matcher) Match(s string) bool {
+	m.check()
+	node := m.root
+	for _, c := range []rune(s) {
+		for node != nil {
+			_, exists := node.child[c]
+			if !exists {
+				node = node.fail
+			} else {
+				return true
+			}
+		}
+
+		if node == nil {
+			node = m.root
+		}
+	}
+
+	return false
+}
