@@ -92,6 +92,28 @@ func TestSearchIndexed(t *testing.T) {
 	}
 }
 
+func TestMatch(t *testing.T) {
+	ac := NewMatcher()
+	ac.BuildWithPatterns(zhSensitiveWords)
+	cases := []struct {
+		q string
+		m bool
+	}{
+		{"独裁", true},
+		{"罢工", true},
+		{"共", false},
+		{"喜提", false},
+		{"shit", false},
+		{"港独分子", true},
+	}
+
+	for _, c := range cases {
+		if ac.Match(c.q) != c.m {
+			t.Fatalf("expected matched result: %t for %s", c.m, c.q)
+		}
+	}
+}
+
 func TestNotBuild(t *testing.T) {
 	defer func() {
 		if r := recover(); r == nil {

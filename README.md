@@ -30,6 +30,7 @@ func main() {
     fmt.Println(indexedHit)
 	
     m.AddPattern("her")
+    m.AddPattern("her")  // repeat added is ok
     m.AddPattern("hers")
     m.Build()  // as far as new pattern added, you must Build again
     fmt.Println(m.Search("shershe"))  // ["she", "he", "her", "hers", "she", "he"]
