@@ -59,6 +59,9 @@ func TestSearch(t *testing.T) {
 		if m != nil {
 			t.Fatalf("you should got nothing, but got: %v", m)
 		}
+		if ac.Match("aho corasick") {
+			t.Fatalf("should not matched")
+		}
 
 		ac.AddPattern("foo")
 		ac.AddPattern("foo")
