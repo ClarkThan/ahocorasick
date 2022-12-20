@@ -217,13 +217,17 @@ func (m *Matcher) Search(s string) (ret []string) {
 func (m *Matcher) Match(s string) bool {
 	m.check()
 	node := m.root
-	for _, c := range []rune(s) {
+	for _, c := range s {
 		for node != nil {
-			_, exists := node.child[c]
+			n, exists := node.child[c]
 			if !exists {
 				node = node.fail
 			} else {
-				return true
+				node = n
+				if len(n.ends) > 0 {
+					return true
+				}
+				break
 			}
 		}
 

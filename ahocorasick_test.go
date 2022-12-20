@@ -115,6 +115,12 @@ func TestMatch(t *testing.T) {
 			t.Fatalf("expected matched result: %t for %s", c.m, c.q)
 		}
 	}
+
+	m := NewMatcher()
+	m.BuildWithPatterns([]string{"俄罗斯", "war", "Ukraine", "😭", "こんにちは", "¿puedes", "침략"})
+	if m.Match("2022年2月24日开始，俄白联盟以“非军事化、去纳粹化”为由，大规模入侵乌克兰") {
+		t.Fatal("should not matched")
+	}
 }
 
 func TestNotBuild(t *testing.T) {
