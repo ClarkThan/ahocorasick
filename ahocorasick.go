@@ -7,9 +7,9 @@ type Matcher struct {
 }
 
 type Node struct {
-	child map[rune]*Node
-	fail  *Node
-	ends  []int // length of those pattern strings which ended with this node
+	child  map[rune]*Node
+	fail   *Node
+	length int // length of the pattern string which ended with this node
 }
 
 // A Hit records matched pattern string's start index in the searched string,
@@ -76,7 +76,7 @@ func NewMatcher() *Matcher {
 // doAddPattern handles the trie building with the input pattern string
 func (m *Matcher) doAddPattern(pat string) {
 	node := m.root
-	len := 0
+	cnt := 0
 	for _, chr := range pat {
 		nn, exists := node.child[chr]
 		if !exists {
@@ -84,16 +84,10 @@ func (m *Matcher) doAddPattern(pat string) {
 			node.child[chr] = nn
 		}
 		node = nn
-		len++
+		cnt++
 	}
 
-	// if existed then skip
-	for _, e := range node.ends {
-		if e == len {
-			return
-		}
-	}
-	node.ends = append(node.ends, len)
+	node.length = cnt
 }
 
 func (m *Matcher) AddPattern(pat string) {
@@ -111,6 +105,8 @@ func (m *Matcher) Build() {
 	q := newQueue()
 	for n := m.root; n != nil; n = q.pop() {
 		for c, v := range n.child {
+			q.Push(v)
+
 			if n == m.root {
 				v.fail = m.root // fail pointer of first char of pattern always has to be the root
 			} else {
@@ -118,19 +114,6 @@ func (m *Matcher) Build() {
 				for ; fatherFail != nil; fatherFail = fatherFail.fail {
 					if k, exists := fatherFail.child[c]; exists {
 						v.fail = k
-						// if k.ends's element has existed in v.ends then skip
-						for _, ke := range k.ends {
-							exists := false
-							for _, ve := range v.ends {
-								if ke == ve {
-									exists = true
-									break
-								}
-							}
-							if !exists {
-								v.ends = append(v.ends, ke)
-							}
-						}
 						break
 					}
 				}
@@ -139,8 +122,6 @@ func (m *Matcher) Build() {
 					v.fail = m.root
 				}
 			}
-
-			q.Push(v)
 		}
 	}
 }
@@ -167,12 +148,16 @@ func (m *Matcher) SearchIndexed(s string) (ret []Hit) {
 		for node != nil {
 			n, exists := node.child[c]
 			if !exists {
-				node = node.fail // try to find at its fail pointer node
-			} else {
-				node = n
-				for _, e := range n.ends {
-					ret = append(ret, Hit{Start: i - e + 1, Len: e})
+				node = node.fail                    // try to find at its fail pointer node
+				if node != nil && node.length > 0 { // check if fail node is a pattern end
+					ret = append(ret, Hit{Start: i - node.length, Len: node.length})
 				}
+			} else {
+				if n.length > 0 {
+					ret = append(ret, Hit{Start: i + 1 - n.length, Len: n.length})
+				}
+
+				node = n
 				break // hit a char, then find next char
 			}
 		}
@@ -196,11 +181,15 @@ func (m *Matcher) Search(s string) (ret []string) {
 			n, exists := node.child[c]
 			if !exists {
 				node = node.fail
-			} else {
-				node = n
-				for _, e := range n.ends {
-					ret = append(ret, string(chars[(i-e+1):i+1]))
+				if node != nil && node.length > 0 {
+					ret = append(ret, string(chars[(i-node.length):i]))
 				}
+			} else {
+				if n.length > 0 {
+					ret = append(ret, string(chars[(i+1-n.length):i+1]))
+				}
+
+				node = n
 				break
 			}
 		}
@@ -222,11 +211,14 @@ func (m *Matcher) Match(s string) bool {
 			n, exists := node.child[c]
 			if !exists {
 				node = node.fail
-			} else {
-				node = n
-				if len(n.ends) > 0 {
+				if node != nil && node.length > 0 {
 					return true
 				}
+			} else {
+				if n.length > 0 {
+					return true
+				}
+				node = n
 				break
 			}
 		}
