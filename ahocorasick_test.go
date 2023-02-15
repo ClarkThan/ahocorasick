@@ -70,6 +70,51 @@ func TestSearch(t *testing.T) {
 		if len(m) != 3 || m[0] != "foo" || m[1] != " " || m[2] != " " {
 			t.Fatalf("expected got `foo`, but got: %v", m)
 		}
+
+		s1 := "ahishershe"
+		ac1 := NewMatcher()
+		ac1.BuildWithPatterns([]string{"his", "hers", "he", "she"})
+		m1 := ac1.Search(s1)
+		if m1[0] != "his" || m1[1] != "she" || m1[2] != "he" || m1[3] != "hers" || m1[4] != "she" || m1[5] != "he" {
+			t.Fatalf("expected `his`, `she`, `he`, `hers`, `she`, `he`, but got: %v", m)
+		}
+
+		si := ac1.SearchIndexed(s1)
+		if len(m1) != len(si) {
+			t.Fatalf("Search and SearchIndexed is not consistent for data: %s", s1)
+		}
+
+		chars := []rune(s1)
+		for i := 0; i < len(m1); i++ {
+			start := si[i].Start
+			end := si[i].Start + si[i].Len
+			x := string(chars[start:end])
+			if x != m1[i] {
+				t.Fatalf("the %dth matched of SearchIndexed(%s) and Search(%s) are not equal", i+1, x, m1[i])
+			}
+		}
+
+		ac3 := NewMatcher()
+		ac3.BuildWithPatterns([]string{"1", "21", "321", "4321", "54321", "数字9", "987654321"})
+		s3 := "数字987654321"
+		chars3 := []rune(s3)
+		exp3 := []string{"数字9", "987654321", "54321", "4321", "321", "21", "1"}
+
+		m3 := ac3.Search(s3)
+		si3 := ac3.SearchIndexed(s3)
+
+		if len(m3) != len(si3) {
+			t.Fatalf("Search and SearchIndexed is not consistent for data: %s", s3)
+		}
+
+		for i := 0; i < len(m3); i++ {
+			start := si3[i].Start
+			end := si3[i].Start + si3[i].Len
+			x := string(chars3[start:end])
+			if x != m3[i] || x != exp3[i] {
+				t.Fatalf("%dth matched of SearchIndexed(%s) and Search(%s) are not equal, and expected: %s", i+1, x, m3[i], exp3[i])
+			}
+		}
 	})
 }
 
@@ -120,6 +165,20 @@ func TestMatch(t *testing.T) {
 	m.BuildWithPatterns([]string{"俄罗斯", "war", "Ukraine", "😭", "こんにちは", "¿puedes", "침략"})
 	if m.Match("2022年2月24日开始，俄白联盟以“非军事化、去纳粹化”为由，大规模入侵乌克兰") {
 		t.Fatal("should not matched")
+	}
+
+	ac1 := NewMatcher()
+	ac1.BuildWithPatterns([]string{"foo", "bar", "baz"})
+	if !ac1.Match("xxxxxxx你好 yyyyybar") {
+		t.Fatalf("expected matched result: %s for %s", "xxxxxxx你好 yyyyybar", "bar")
+	}
+
+	ac2 := NewMatcher()
+	ac2.BuildWithPatterns([]string{"国人", "中国人", "新中国"})
+	exp := []string{"新中国", "中国人", "国人"}
+	ret := ac2.Search("我是新中国人")
+	if ret[0] != exp[0] || ret[1] != exp[1] || ret[2] != exp[2] {
+		t.Fatalf("expected matched result: %v for %s, but got %+v", exp, "我是新中国人", ret)
 	}
 }
 

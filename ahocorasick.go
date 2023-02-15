@@ -144,7 +144,8 @@ func (m *Matcher) check() {
 func (m *Matcher) SearchIndexed(s string) (ret []Hit) {
 	m.check()
 	node := m.root
-	for i, c := range []rune(s) {
+	chars := []rune(s)
+	for i, c := range chars {
 		for node != nil {
 			n, exists := node.child[c]
 			if !exists {
@@ -166,6 +167,12 @@ func (m *Matcher) SearchIndexed(s string) (ret []Hit) {
 		if node == nil {
 			node = m.root
 		}
+	}
+
+	// maybe the father fail pointer of the last char node correspond to a pattern, and so on
+	for n := node.fail; n != nil && n.length > 0; n = n.fail {
+		startIdx := len(chars) - n.length
+		ret = append(ret, Hit{Start: startIdx, Len: n.length})
 	}
 
 	return
@@ -197,6 +204,12 @@ func (m *Matcher) Search(s string) (ret []string) {
 		if node == nil {
 			node = m.root
 		}
+	}
+
+	// maybe the father fail pointer of the last char node correspond to a pattern, and so on
+	for n := node.fail; n != nil && n.length > 0; n = n.fail {
+		startIdx := len(chars) - n.length
+		ret = append(ret, string(chars[startIdx:]))
 	}
 
 	return
