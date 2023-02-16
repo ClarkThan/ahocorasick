@@ -9,6 +9,10 @@ Package `ahocorasick` is a Golang implementation of the Aho-Corasick multiple pa
 go get github.com/ClarkThan/ahocorasick
 ```
 
+## API Description
+https://pkg.go.dev/github.com/ClarkThan/ahocorasick
+
+
 ## Usage
 
 ```go 
