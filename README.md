@@ -27,11 +27,13 @@ import (
 func main() {
     m := ahocorasick.NewMatcher()
     m.BuildWithPatterns([]string{"she", "he"})
-    ret1 := m.Search("shers")  // ["she", "he"]
-    fmt.Println(ret1)
+    hit := m.Search("shers")  // ["she", "he"]
+    fmt.Println(hit)
     
-    indexedHit := m.SearchIndexed("shers")  // [{0, 3}, {1, 2}]
-    fmt.Println(indexedHit)
+    fmt.Println(m.Match("she"), m.Match("sHe")) // true false
+    
+    hitIdx := m.SearchIndexed("shers")  // [{0, 3}, {1, 2}]
+    fmt.Println(hitIdx)
 	
     m.AddPattern("her")
     m.AddPattern("her")  // repeat added is ok
