@@ -6,25 +6,49 @@ name: Go
 on:
   push:
     branches: [ "main" ]
+    tags: ['v*']
   pull_request:
     branches: [ "main" ]
 
 jobs:
-
-  build:
+  lint:
+    name: Lint
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+      - name: Setup Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.20'
+          cache: true
 
-    - name: Setup Go
-      uses: actions/setup-go@v4
-      with:
-        go-version: '1.20'
-        cache: true
-        cache-dependency-path: '**/go.sum'
+      - name: Checkout Code
+        uses: actions/checkout@v3
 
-    - name: Build
-      run: go build -v ./...
+      - name: Lint Code
+        run: |
+          export PATH=$PATH:$(go env GOPATH)/bin
+          go get -u golang.org/x/lint/golint
+          make lint
 
-    - name: Test
-      run: go test -v ./...
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    needs: [lint]
+    steps:
+      - name: Setup Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.20'
+          cache: true
+
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Run Unit tests.
+        run: make test-coverage
+
+      - name: Upload Coverage report to CodeCov
+        uses: codecov/codecov-action@v3
+        with:
+          token: ${{secrets.CODECOV_TOKEN}}
+          file: ./coverage.txt
