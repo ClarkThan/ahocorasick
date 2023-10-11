@@ -35,9 +35,9 @@ func TestSearch(t *testing.T) {
 		ac := NewMatcher()
 
 		ac.BuildWithPatterns(zhSensitiveWords)
-		m1 := ac.Search("你有没有管制刀具呢港独分子")
-		if m1[0] != "管制刀具" || m1[1] != "港独" {
-			t.Fatalf("expected `管制刀具`, `港独`, but got: %s, %s", m1[0], m1[1])
+		m1 := ac.Search("你这个反社会分子，我要没收你的管制刀具！")
+		if m1[0] != "反社会" || m1[1] != "管制刀具" {
+			t.Fatalf("expected `反社会`, `管制刀具`, but got: %s, %s", m1[0], m1[1])
 		}
 
 		for _, w := range enWords {
@@ -122,7 +122,7 @@ func TestSearchIndexed(t *testing.T) {
 	ac := NewMatcher()
 
 	ac.BuildWithPatterns(zhSensitiveWords)
-	s := "你有没有管制刀具呢港独分子"
+	s := "你这个反社会分子，我要没收你的管制刀具！"
 	m := ac.SearchIndexed(s)
 	if len(m) != 2 {
 		t.Fatalf("expected two word matched, but got: %d", len(m))
@@ -135,8 +135,8 @@ func TestSearchIndexed(t *testing.T) {
 		matched = append(matched, s)
 	}
 
-	if matched[0] != "管制刀具" || matched[1] != "港独" {
-		t.Fatalf("expected `管制刀具`, `港独`, but got: %s, %s", matched[0], matched[1])
+	if matched[0] != "反社会" || matched[1] != "管制刀具" {
+		t.Fatalf("expected `反社会`, `管制刀具`, but got: %s, %s", matched[0], matched[1])
 	}
 }
 
@@ -201,6 +201,6 @@ func BenchmarkAC(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		ac := NewMatcher()
 		ac.BuildWithPatterns(zhSensitiveWords)
-		_ = ac.Search("你有没有管制刀具呢港独分子")
+		_ = ac.Search("你这个反社会分子，我要没收你的管制刀具！")
 	}
 }
