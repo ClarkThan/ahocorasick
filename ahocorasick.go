@@ -140,8 +140,15 @@ func (m *Matcher) check() {
 	}
 }
 
-// SearchIndexed return start index in the searched string and length of the matched pattern strings
-func (m *Matcher) SearchIndexed(s string) (ret []Hit) {
+// SearchIndexedAppend appends Hits (start index + length) to buf and returns the extended slice.
+// The caller can reuse buf across calls by resetting it to zero length while keeping its capacity:
+//
+//	buf := make([]Hit, 0, 64)
+//	for _, text := range texts {
+//	    buf = m.SearchIndexedAppend(text, buf[:0])
+//	    // process buf ...
+//	}
+func (m *Matcher) SearchIndexedAppend(s string, buf []Hit) []Hit {
 	m.check()
 	node := m.root
 	chars := []rune(s)
@@ -149,13 +156,13 @@ func (m *Matcher) SearchIndexed(s string) (ret []Hit) {
 		for node != nil {
 			n, exists := node.child[c]
 			if !exists {
-				node = node.fail                    // try to find at its fail pointer node
-				if node != nil && node.length > 0 { // check if fail node is a pattern end
-					ret = append(ret, Hit{Start: i - node.length, Len: node.length})
-				}
+				node = node.fail // try to find at its fail pointer node
 			} else {
-				if n.length > 0 {
-					ret = append(ret, Hit{Start: i + 1 - n.length, Len: n.length})
+				// collect all outputs from n and its fail chain
+				for m := n; m != nil; m = m.fail {
+					if m.length > 0 {
+						buf = append(buf, Hit{Start: i + 1 - m.length, Len: m.length})
+					}
 				}
 
 				node = n
@@ -169,17 +176,19 @@ func (m *Matcher) SearchIndexed(s string) (ret []Hit) {
 		}
 	}
 
-	// maybe the father fail pointer of the last char node correspond to a pattern, and so on
-	for n := node.fail; n != nil && n.length > 0; n = n.fail {
-		startIdx := len(chars) - n.length
-		ret = append(ret, Hit{Start: startIdx, Len: n.length})
-	}
-
-	return
+	return buf
 }
 
-// Search return the matched pattern strings
-func (m *Matcher) Search(s string) (ret []string) {
+// SearchIndexed return start index in the searched string and length of the matched pattern strings
+func (m *Matcher) SearchIndexed(s string) []Hit {
+	return m.SearchIndexedAppend(s, nil)
+}
+
+// SearchAppend appends matched pattern strings to buf and returns the extended slice.
+// The caller can reuse buf across calls by resetting it to zero length while keeping its capacity:
+//
+//	buf := m.SearchAppend("some text", buf[:0])
+func (m *Matcher) SearchAppend(s string, buf []string) []string {
 	m.check()
 	node := m.root
 	chars := []rune(s)
@@ -188,12 +197,12 @@ func (m *Matcher) Search(s string) (ret []string) {
 			n, exists := node.child[c]
 			if !exists {
 				node = node.fail
-				if node != nil && node.length > 0 {
-					ret = append(ret, string(chars[(i-node.length):i]))
-				}
 			} else {
-				if n.length > 0 {
-					ret = append(ret, string(chars[(i+1-n.length):i+1]))
+				// collect all outputs from n and its fail chain
+				for m := n; m != nil; m = m.fail {
+					if m.length > 0 {
+						buf = append(buf, string(chars[(i+1-m.length):i+1]))
+					}
 				}
 
 				node = n
@@ -206,13 +215,12 @@ func (m *Matcher) Search(s string) (ret []string) {
 		}
 	}
 
-	// maybe the father fail pointer of the last char node correspond to a pattern, and so on
-	for n := node.fail; n != nil && n.length > 0; n = n.fail {
-		startIdx := len(chars) - n.length
-		ret = append(ret, string(chars[startIdx:]))
-	}
+	return buf
+}
 
-	return
+// Search return the matched pattern strings
+func (m *Matcher) Search(s string) []string {
+	return m.SearchAppend(s, nil)
 }
 
 // Match return true if does matched
@@ -228,8 +236,11 @@ func (m *Matcher) Match(s string) bool {
 					return true
 				}
 			} else {
-				if n.length > 0 {
-					return true
+				// if n or any node on its fail chain is an output, return true
+				for m := n; m != nil; m = m.fail {
+					if m.length > 0 {
+						return true
+					}
 				}
 				node = n
 				break

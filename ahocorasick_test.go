@@ -197,10 +197,272 @@ func TestNotBuild(t *testing.T) {
 	_ = ac.Search("foo bar baz")
 }
 
-func BenchmarkAC(b *testing.B) {
-	for i := 0; i < b.N; i++ {
+// TestSearchSuffixPatterns 验证 AC 算法能否正确匹配同一个位置的所有重叠 pattern。
+// 验证修复：直接子节点匹配时，需遍历 n 的 fail 链收集所有以当前位置结尾的 pattern。
+func TestSearchSuffixPatterns(t *testing.T) {
+	t.Run("suffix pattern on fail chain", func(t *testing.T) {
+		// "ab" 匹配后，其 fail 链上的 "b"（ab 后缀）也应匹配。
+		// 即使下一个字符 'c' 是 ab 的直接子节点（abc 模式），
+		// 也应通过 fail 链找到 "b"。
 		ac := NewMatcher()
-		ac.BuildWithPatterns(zhSensitiveWords)
-		_ = ac.Search("你这个反社会分子，我要没收你的管制刀具！")
-	}
+		ac.BuildWithPatterns([]string{"ab", "b", "abc"})
+		ret := ac.Search("abc")
+		if len(ret) != 3 {
+			t.Fatalf("expected 3 matches, but got %d: %v", len(ret), ret)
+		}
+		// 验证所有 pattern 都找到了（顺序不重要）
+		patternSet := map[string]bool{"ab": true, "b": true, "abc": true}
+		for _, s := range ret {
+			if !patternSet[s] {
+				t.Fatalf("unexpected match: %s", s)
+			}
+		}
+
+		si := ac.SearchIndexed("abc")
+		if len(si) != 3 {
+			t.Fatalf("SearchIndexed: expected 3 hits, but got %d: %v", len(si), si)
+		}
+	})
+
+	t.Run("multiple suffix patterns lost in chain", func(t *testing.T) {
+		// "abc" 匹配后，fail 链上有 "bc" 和 "c"。
+		// 下一字符 'd' 是 abc 的直接子节点（abcd 模式），
+		// 导致 "bc" 和 "c" 都丢失。
+		ac := NewMatcher()
+		ac.BuildWithPatterns([]string{"abc", "bc", "c", "abcd"})
+		ret := ac.Search("abcd")
+		if len(ret) != 4 {
+			t.Fatalf("expected 4 matches [abc bc c abcd], but got %d: %v", len(ret), ret)
+		}
+		// 注意：顺序取决于实现，但数量必须正确
+		// 验证每个结果的内容都是有效 pattern
+		patternSet := map[string]bool{"abc": true, "bc": true, "c": true, "abcd": true}
+		for _, s := range ret {
+			if !patternSet[s] {
+				t.Fatalf("unexpected match: %s", s)
+			}
+		}
+
+		si := ac.SearchIndexed("abcd")
+		if len(si) != 4 {
+			t.Fatalf("SearchIndexed: expected 4 hits, but got %d: %v", len(si), si)
+		}
+	})
+
+	t.Run("overlapping short patterns at every position", func(t *testing.T) {
+		// "aaaa" 中每个位置都应该匹配 "a"，
+		// 同时还有 "aa"/"aaa"/"aaaa" 等重叠 pattern。
+		ac := NewMatcher()
+		ac.BuildWithPatterns([]string{"a", "aa", "aaa", "aaaa"})
+		ret := ac.Search("aaaa")
+		// 预期: a@0, aa@0, aaa@0, aaaa@0, a@1, aa@1, aaa@1, a@2, aa@2, a@3
+		// 总共 10 个匹配
+		if len(ret) != 10 {
+			t.Fatalf("expected 10 matches for 'aaaa', but got %d: %v", len(ret), ret)
+		}
+
+		// SearchIndexed 验证
+		si := ac.SearchIndexed("aaaa")
+		if len(si) != 10 {
+			t.Fatalf("SearchIndexed: expected 10 hits, but got %d: %v", len(si), si)
+		}
+
+		// 按位置验证每个 start 位置出现的匹配数
+		posCount := make(map[int]int)
+		for _, h := range si {
+			posCount[h.Start]++
+		}
+		// 位置0: a, aa, aaa, aaaa → 4
+		// 位置1: a, aa, aaa          → 3
+		// 位置2: a, aa               → 2
+		// 位置3: a                   → 1
+		expectedPosCount := map[int]int{0: 4, 1: 3, 2: 2, 3: 1}
+		for pos, cnt := range expectedPosCount {
+			if posCount[pos] != cnt {
+				t.Fatalf("position %d: expected %d matches, got %d", pos, cnt, posCount[pos])
+			}
+		}
+	})
+
+	t.Run("suffix pattern found only via fail chain (not at end)", func(t *testing.T) {
+		// "ab" 的 fail 指向 "b"，但 "b" 一直要到下一个不匹配的字符（或尾随检查）才被找到。
+		// 即使行尾检查能补救，但顺序可能不对，且 SearchIndexed 应给出正确的 start 位置。
+		ac := NewMatcher()
+		ac.BuildWithPatterns([]string{"ab", "b"})
+
+		// 不带后续匹配：尾随检查能补救
+		ret := ac.Search("ab")
+		// 预期: ab@0, b@1
+		if len(ret) != 2 {
+			t.Fatalf("expected 2 matches [ab b], got %d: %v", len(ret), ret)
+		}
+
+		// 带后续不匹配字符：fail 链会在下一字符被遍历
+		ret2 := ac.Search("abx")
+		if len(ret2) != 2 {
+			t.Fatalf("expected 2 matches [ab b], got %d: %v", len(ret2), ret2)
+		}
+	})
+
+	t.Run("deep fail chain in unicode text", func(t *testing.T) {
+		// 中文场景：重叠 pattern
+		ac := NewMatcher()
+		ac.BuildWithPatterns([]string{"中国人", "国人", "人", "中国"})
+
+		ret := ac.Search("中国人")
+		if len(ret) != 4 {
+			t.Fatalf("expected 4 matches [中国人 国人 人 中国] or similar, got %d: %v", len(ret), ret)
+		}
+
+		si := ac.SearchIndexed("中国人")
+		if len(si) != 4 {
+			t.Fatalf("SearchIndexed: expected 4 hits, got %d: %v", len(si), si)
+		}
+
+		chars := []rune("中国人")
+		for _, h := range si {
+			if h.Start < 0 || h.Start+h.Len > len(chars) {
+				t.Fatalf("invalid hit range: Start=%d Len=%d", h.Start, h.Len)
+			}
+		}
+	})
+
+	t.Run("Match also misses suffix patterns", func(t *testing.T) {
+		// Match 方法也有同样的 bug：
+		// 当 "abc" 匹配时，应返回 true，不管是否遍历了 fail 链
+		ac := NewMatcher()
+		ac.BuildWithPatterns([]string{"ab", "b"})
+		if !ac.Match("ab") {
+			t.Fatal("Match('ab') should be true")
+		}
+
+		// 更复杂的场景：
+		ac2 := NewMatcher()
+		ac2.BuildWithPatterns([]string{"abc", "bc", "c", "abcd"})
+		if !ac2.Match("abcd") {
+			t.Fatal("Match('abcd') should be true")
+		}
+	})
+}
+
+// --- Benchmark 对比: Search (旧 API) vs SearchAppend (buffer 复用) ---
+
+// benchmark patterns & text
+var bmPatterns = []string{"he", "she", "his", "hers", "her", "jordan", "kobe", "lebron", "james", "bryant"}
+
+const bmText = "she is his girlfriend, she said he loves her. jordan and kobe are legends, but lebron james is the goat. bryant will never be forgotten. she said his hero is her father. he loves basketball."
+
+var bmTexts = []string{
+	"she is his girlfriend, she said he loves her.",
+	"jordan and kobe are legends, but lebron james is the goat.",
+	"bryant will never be forgotten. she said his hero is her father.",
+	"he loves basketball and she loves tennis.",
+	"his brother is a fan of kobe bryant.",
+	"her sister is a fan of lebron james.",
+	"jordan was the best, but lebron is close.",
+	"she and he are both fans of kobe.",
+	"his favorite player is jordan, hers is lebron.",
+	"they all love basketball, she said.",
+}
+
+func BenchmarkSearch_Single(b *testing.B) {
+	ac := NewMatcher()
+	ac.BuildWithPatterns(bmPatterns)
+
+	b.Run("Search_fresh", func(b *testing.B) {
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			_ = ac.Search(bmText)
+		}
+	})
+
+	b.Run("SearchAppend_nil", func(b *testing.B) {
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			_ = ac.SearchAppend(bmText, nil)
+		}
+	})
+
+	b.Run("SearchAppend_prealloc", func(b *testing.B) {
+		b.ReportAllocs()
+		buf := make([]string, 0, 64)
+		for i := 0; i < b.N; i++ {
+			buf = ac.SearchAppend(bmText, buf[:0])
+		}
+	})
+}
+
+func BenchmarkSearch_Multi(b *testing.B) {
+	ac := NewMatcher()
+	ac.BuildWithPatterns(bmPatterns)
+
+	b.Run("Search_fresh_10x", func(b *testing.B) {
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			for _, t := range bmTexts {
+				_ = ac.Search(t)
+			}
+		}
+	})
+
+	b.Run("SearchAppend_reuse_10x", func(b *testing.B) {
+		b.ReportAllocs()
+		buf := make([]string, 0, 64)
+		for i := 0; i < b.N; i++ {
+			for _, t := range bmTexts {
+				buf = ac.SearchAppend(t, buf[:0])
+			}
+		}
+	})
+}
+
+func BenchmarkSearchIndexed_Single(b *testing.B) {
+	ac := NewMatcher()
+	ac.BuildWithPatterns(bmPatterns)
+
+	b.Run("SearchIndexed_fresh", func(b *testing.B) {
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			_ = ac.SearchIndexed(bmText)
+		}
+	})
+
+	b.Run("SearchIndexedAppend_nil", func(b *testing.B) {
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			_ = ac.SearchIndexedAppend(bmText, nil)
+		}
+	})
+
+	b.Run("SearchIndexedAppend_prealloc", func(b *testing.B) {
+		b.ReportAllocs()
+		buf := make([]Hit, 0, 64)
+		for i := 0; i < b.N; i++ {
+			buf = ac.SearchIndexedAppend(bmText, buf[:0])
+		}
+	})
+}
+
+func BenchmarkSearchIndexed_Multi(b *testing.B) {
+	ac := NewMatcher()
+	ac.BuildWithPatterns(bmPatterns)
+
+	b.Run("SearchIndexed_fresh_10x", func(b *testing.B) {
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			for _, t := range bmTexts {
+				_ = ac.SearchIndexed(t)
+			}
+		}
+	})
+
+	b.Run("SearchIndexedAppend_reuse_10x", func(b *testing.B) {
+		b.ReportAllocs()
+		buf := make([]Hit, 0, 64)
+		for i := 0; i < b.N; i++ {
+			for _, t := range bmTexts {
+				buf = ac.SearchIndexedAppend(t, buf[:0])
+			}
+		}
+	})
 }
