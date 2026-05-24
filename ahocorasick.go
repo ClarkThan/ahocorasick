@@ -149,13 +149,13 @@ func (m *Matcher) SearchIndexed(s string) (ret []Hit) {
 		for node != nil {
 			n, exists := node.child[c]
 			if !exists {
-				node = node.fail                    // try to find at its fail pointer node
-				if node != nil && node.length > 0 { // check if fail node is a pattern end
-					ret = append(ret, Hit{Start: i - node.length, Len: node.length})
-				}
+				node = node.fail // try to find at its fail pointer node
 			} else {
-				if n.length > 0 {
-					ret = append(ret, Hit{Start: i + 1 - n.length, Len: n.length})
+				// collect all outputs from n and its fail chain
+				for m := n; m != nil; m = m.fail {
+					if m.length > 0 {
+						ret = append(ret, Hit{Start: i + 1 - m.length, Len: m.length})
+					}
 				}
 
 				node = n
@@ -167,12 +167,6 @@ func (m *Matcher) SearchIndexed(s string) (ret []Hit) {
 		if node == nil {
 			node = m.root
 		}
-	}
-
-	// maybe the father fail pointer of the last char node correspond to a pattern, and so on
-	for n := node.fail; n != nil && n.length > 0; n = n.fail {
-		startIdx := len(chars) - n.length
-		ret = append(ret, Hit{Start: startIdx, Len: n.length})
 	}
 
 	return
@@ -188,12 +182,12 @@ func (m *Matcher) Search(s string) (ret []string) {
 			n, exists := node.child[c]
 			if !exists {
 				node = node.fail
-				if node != nil && node.length > 0 {
-					ret = append(ret, string(chars[(i-node.length):i]))
-				}
 			} else {
-				if n.length > 0 {
-					ret = append(ret, string(chars[(i+1-n.length):i+1]))
+				// collect all outputs from n and its fail chain
+				for m := n; m != nil; m = m.fail {
+					if m.length > 0 {
+						ret = append(ret, string(chars[(i+1-m.length):i+1]))
+					}
 				}
 
 				node = n
@@ -204,12 +198,6 @@ func (m *Matcher) Search(s string) (ret []string) {
 		if node == nil {
 			node = m.root
 		}
-	}
-
-	// maybe the father fail pointer of the last char node correspond to a pattern, and so on
-	for n := node.fail; n != nil && n.length > 0; n = n.fail {
-		startIdx := len(chars) - n.length
-		ret = append(ret, string(chars[startIdx:]))
 	}
 
 	return
@@ -228,8 +216,11 @@ func (m *Matcher) Match(s string) bool {
 					return true
 				}
 			} else {
-				if n.length > 0 {
-					return true
+				// if n or any node on its fail chain is an output, return true
+				for m := n; m != nil; m = m.fail {
+					if m.length > 0 {
+						return true
+					}
 				}
 				node = n
 				break
