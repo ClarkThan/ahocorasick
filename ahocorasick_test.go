@@ -345,10 +345,124 @@ func TestSearchSuffixPatterns(t *testing.T) {
 	})
 }
 
-func BenchmarkAC(b *testing.B) {
-	for i := 0; i < b.N; i++ {
-		ac := NewMatcher()
-		ac.BuildWithPatterns(zhSensitiveWords)
-		_ = ac.Search("你这个反社会分子，我要没收你的管制刀具！")
-	}
+// --- Benchmark 对比: Search (旧 API) vs SearchAppend (buffer 复用) ---
+
+// benchmark patterns & text
+var bmPatterns = []string{"he", "she", "his", "hers", "her", "jordan", "kobe", "lebron", "james", "bryant"}
+
+const bmText = "she is his girlfriend, she said he loves her. jordan and kobe are legends, but lebron james is the goat. bryant will never be forgotten. she said his hero is her father. he loves basketball."
+
+var bmTexts = []string{
+	"she is his girlfriend, she said he loves her.",
+	"jordan and kobe are legends, but lebron james is the goat.",
+	"bryant will never be forgotten. she said his hero is her father.",
+	"he loves basketball and she loves tennis.",
+	"his brother is a fan of kobe bryant.",
+	"her sister is a fan of lebron james.",
+	"jordan was the best, but lebron is close.",
+	"she and he are both fans of kobe.",
+	"his favorite player is jordan, hers is lebron.",
+	"they all love basketball, she said.",
+}
+
+func BenchmarkSearch_Single(b *testing.B) {
+	ac := NewMatcher()
+	ac.BuildWithPatterns(bmPatterns)
+
+	b.Run("Search_fresh", func(b *testing.B) {
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			_ = ac.Search(bmText)
+		}
+	})
+
+	b.Run("SearchAppend_nil", func(b *testing.B) {
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			_ = ac.SearchAppend(bmText, nil)
+		}
+	})
+
+	b.Run("SearchAppend_prealloc", func(b *testing.B) {
+		b.ReportAllocs()
+		buf := make([]string, 0, 64)
+		for i := 0; i < b.N; i++ {
+			buf = ac.SearchAppend(bmText, buf[:0])
+		}
+	})
+}
+
+func BenchmarkSearch_Multi(b *testing.B) {
+	ac := NewMatcher()
+	ac.BuildWithPatterns(bmPatterns)
+
+	b.Run("Search_fresh_10x", func(b *testing.B) {
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			for _, t := range bmTexts {
+				_ = ac.Search(t)
+			}
+		}
+	})
+
+	b.Run("SearchAppend_reuse_10x", func(b *testing.B) {
+		b.ReportAllocs()
+		buf := make([]string, 0, 64)
+		for i := 0; i < b.N; i++ {
+			for _, t := range bmTexts {
+				buf = ac.SearchAppend(t, buf[:0])
+			}
+		}
+	})
+}
+
+func BenchmarkSearchIndexed_Single(b *testing.B) {
+	ac := NewMatcher()
+	ac.BuildWithPatterns(bmPatterns)
+
+	b.Run("SearchIndexed_fresh", func(b *testing.B) {
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			_ = ac.SearchIndexed(bmText)
+		}
+	})
+
+	b.Run("SearchIndexedAppend_nil", func(b *testing.B) {
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			_ = ac.SearchIndexedAppend(bmText, nil)
+		}
+	})
+
+	b.Run("SearchIndexedAppend_prealloc", func(b *testing.B) {
+		b.ReportAllocs()
+		buf := make([]Hit, 0, 64)
+		for i := 0; i < b.N; i++ {
+			buf = ac.SearchIndexedAppend(bmText, buf[:0])
+		}
+	})
+}
+
+func BenchmarkSearchIndexed_Multi(b *testing.B) {
+	ac := NewMatcher()
+	ac.BuildWithPatterns(bmPatterns)
+
+	b.Run("SearchIndexed_fresh_10x", func(b *testing.B) {
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			for _, t := range bmTexts {
+				_ = ac.SearchIndexed(t)
+			}
+		}
+	})
+
+	b.Run("SearchIndexedAppend_reuse_10x", func(b *testing.B) {
+		b.ReportAllocs()
+		buf := make([]Hit, 0, 64)
+		for i := 0; i < b.N; i++ {
+			for _, t := range bmTexts {
+				buf = ac.SearchIndexedAppend(t, buf[:0])
+			}
+		}
+	})
 }

@@ -140,8 +140,15 @@ func (m *Matcher) check() {
 	}
 }
 
-// SearchIndexed return start index in the searched string and length of the matched pattern strings
-func (m *Matcher) SearchIndexed(s string) (ret []Hit) {
+// SearchIndexedAppend appends Hits (start index + length) to buf and returns the extended slice.
+// The caller can reuse buf across calls by resetting it to zero length while keeping its capacity:
+//
+//	buf := make([]Hit, 0, 64)
+//	for _, text := range texts {
+//	    buf = m.SearchIndexedAppend(text, buf[:0])
+//	    // process buf ...
+//	}
+func (m *Matcher) SearchIndexedAppend(s string, buf []Hit) []Hit {
 	m.check()
 	node := m.root
 	chars := []rune(s)
@@ -154,7 +161,7 @@ func (m *Matcher) SearchIndexed(s string) (ret []Hit) {
 				// collect all outputs from n and its fail chain
 				for m := n; m != nil; m = m.fail {
 					if m.length > 0 {
-						ret = append(ret, Hit{Start: i + 1 - m.length, Len: m.length})
+						buf = append(buf, Hit{Start: i + 1 - m.length, Len: m.length})
 					}
 				}
 
@@ -169,11 +176,19 @@ func (m *Matcher) SearchIndexed(s string) (ret []Hit) {
 		}
 	}
 
-	return
+	return buf
 }
 
-// Search return the matched pattern strings
-func (m *Matcher) Search(s string) (ret []string) {
+// SearchIndexed return start index in the searched string and length of the matched pattern strings
+func (m *Matcher) SearchIndexed(s string) []Hit {
+	return m.SearchIndexedAppend(s, nil)
+}
+
+// SearchAppend appends matched pattern strings to buf and returns the extended slice.
+// The caller can reuse buf across calls by resetting it to zero length while keeping its capacity:
+//
+//	buf := m.SearchAppend("some text", buf[:0])
+func (m *Matcher) SearchAppend(s string, buf []string) []string {
 	m.check()
 	node := m.root
 	chars := []rune(s)
@@ -186,7 +201,7 @@ func (m *Matcher) Search(s string) (ret []string) {
 				// collect all outputs from n and its fail chain
 				for m := n; m != nil; m = m.fail {
 					if m.length > 0 {
-						ret = append(ret, string(chars[(i+1-m.length):i+1]))
+						buf = append(buf, string(chars[(i+1-m.length):i+1]))
 					}
 				}
 
@@ -200,7 +215,12 @@ func (m *Matcher) Search(s string) (ret []string) {
 		}
 	}
 
-	return
+	return buf
+}
+
+// Search return the matched pattern strings
+func (m *Matcher) Search(s string) []string {
+	return m.SearchAppend(s, nil)
 }
 
 // Match return true if does matched
